@@ -231,6 +231,7 @@
 .bac-err:empty{display:none}
 @media (max-width:1024px){.bac-guide{grid-template-columns:1fr 1fr}.bac-guide li.bac-rule{grid-column:1/-1}}
 @media (max-width:900px){.bac{padding:20px 14px;border-radius:0}.bac-main,.bac-bottom{grid-template-columns:1fr}.bac-stage{position:relative;top:0;min-height:360px}
+  .bac-main{gap:12px}.bac-panel{display:contents}.bac-stage{order:1}.bac-panel>.bac-box:nth-child(n+3){order:2}
   .bac-top{flex-direction:column;gap:10px}}
 @media (max-width:700px){
   .bac-drop{position:fixed;inset:0;z-index:2147483000;border-radius:0;border:0;max-height:none;box-shadow:none}
@@ -342,7 +343,7 @@
       <div class="bac-edge">
         <svg viewBox="0 0 240 150" data-bac="edgeSvg" aria-label="Схема кромки: нажмите на сторону"></svg>
         <div class="bac-edge-btns">
-          <button type="button" class="bac-btn" data-edges="all">Все стороны</button>
+          <button type="button" class="bac-btn" data-edges="all">По периметру</button>
           <button type="button" class="bac-btn" data-edges="none">Без кромки</button>
         </div>
       </div>
@@ -370,7 +371,7 @@
       </div>
       <input name="phone" type="tel" value="+375 " placeholder="+375 44 123-45-67" autocomplete="tel" inputmode="tel" required>
       <textarea name="comment" rows="3" placeholder="Комментарий к заказу (необязательно)"></textarea>
-      <label class="bac-check"><input type="checkbox" name="agree" required><span>Подтверждаю своё полное согласие со стоимостью и со сроками изготовления. Все размеры проверены мной лично.</span></label>
+      <label class="bac-check"><input type="checkbox" name="agree" required><span>Подтверждаю, что все размеры проверены мной лично.</span></label>
       <p class="bac-err" data-bac="err"></p>
       <button class="bac-send" type="submit">Отправить заявку с расчётом</button>
       <p class="bac-legal">Нажимая на кнопку, вы принимаете <a href="https://ba-raspil.by/regulation.html" target="_blank" rel="noopener">Положение</a> и даёте <a href="https://ba-raspil.by/consent.html" target="_blank" rel="noopener">Согласие</a> на обработку персональных данных. Расчёт предварительный, точную цену подтвердит менеджер.</p>
@@ -389,7 +390,7 @@ const CFG = Object.assign({
   tg: null,                      // ТОЛЬКО ДЛЯ ПРОБ: { token, chat } — отправка прямо в Telegram. На сайт не ставить: ключ бота виден всем
   formField: null,               // LPmotor: CSS-селектор поля формы, куда положить текст расчёта
   minSide: 50,
-  edgePriceM: 3,                 // руб. за погонный метр кромки — УСЛОВНО, ждём цену от Павла
+  edgePriceM: 3,                 // руб. за погонный метр кромки BYSPAN — подтверждено 18.11 (Никита); ДВП-кромка — уточняется
   mat: {
     ldsp: { name: 'ЛДСП', t: 18, maxL: 2780, maxW: 2050 },
     dvp: { name: 'ДВП', t: 3.2, maxL: 2490, maxW: 2060, priceM2: 10 }   // ДВП белая; priceM2 — УСЛОВНО
@@ -441,7 +442,7 @@ const edgeCount = p => ({ l: (p.edges.L1 ? 1 : 0) + (p.edges.L2 ? 1 : 0), w: (p.
 function edgeText(p) {
   const { l, w } = edgeCount(p);
   if (l + w === 0) return 'без кромки';
-  if (l + w === 4) return 'по кругу';
+  if (l + w === 4) return 'по периметру';
   const a = []; if (l) a.push(l === 2 ? '2 длинные' : '1 длинная'); if (w) a.push(w === 2 ? '2 короткие' : '1 короткая');
   return a.join(' + ');
 }
@@ -600,8 +601,13 @@ function setSize(key, raw, final) {
   active[key] = clamp(v, CFG.minSide, max);
   update();
 }
-inL.addEventListener('input', () => setSize('L', inL.value, false));
-inW.addEventListener('input', () => setSize('W', inW.value, false));
+// Новая деталь: нажатие на длину или ширину очищает поле (старое число — подсказкой), пока туда не напишут своё число
+function freshFocus(inp, key) { if (!active.fresh || !active.fresh[key]) return; inp.placeholder = String(active[key]); inp.value = ''; }
+function freshBlur(inp, key) { inp.placeholder = ''; if (inp.value === '') inp.value = active[key]; }
+inL.addEventListener('focus', () => freshFocus(inL, 'L')); inW.addEventListener('focus', () => freshFocus(inW, 'W'));
+inL.addEventListener('blur', () => freshBlur(inL, 'L')); inW.addEventListener('blur', () => freshBlur(inW, 'W'));
+inL.addEventListener('input', () => { if (active.fresh && inL.value !== '') active.fresh.L = false; setSize('L', inL.value, false); });
+inW.addEventListener('input', () => { if (active.fresh && inW.value !== '') active.fresh.W = false; setSize('W', inW.value, false); });
 inL.addEventListener('change', () => { setSize('L', inL.value, true); inL.value = active.L; });
 inW.addEventListener('change', () => { setSize('W', inW.value, true); inW.value = active.W; });
 $('search').addEventListener('input', e => { pickQ = e.target.value; renderList(); });
@@ -638,7 +644,7 @@ root.addEventListener('click', e => {
   else if (d.view) { view3d && view3d.setView(d.view); }
   else if (d.bac === 'add' || d.addfrom) {
     const src = d.addfrom ? parts.find(p => p.id === +d.addfrom) : active;
-    active = newPart({ mat: src.mat, brand: src.brand, art: src.art, st: src.st, L: src.L, W: src.W, edges: { ...src.edges } });
+    active = newPart({ mat: src.mat, brand: src.brand, art: src.art, st: src.st, L: src.L, W: src.W, edges: { ...src.edges }, fresh: { L: true, W: true } });
     parts.push(active); update();
     root.querySelector('.bac-main').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
     setTimeout(() => inL.focus({ preventScroll: true }), reduce ? 0 : 450);
@@ -796,7 +802,7 @@ $('form').addEventListener('submit', async e => {
   const err = m => { $('err').textContent = m; };
   if (!v('last') || !v('first')) return err('Напишите фамилию и имя — они нужны для договора.');
   if (!/^\+375\d{9}$/.test(phone)) return err('Допишите номер после +375: код и 7 цифр, например 44 123-45-67.');
-  if (!f.elements.agree.checked) return err('Отметьте, что согласны со стоимостью и проверили размеры.');
+  if (!f.elements.agree.checked) return err('Отметьте, что все размеры проверены вами лично.');
   err('');
   const who = { fio: [v('last'), v('first'), v('middle')].filter(Boolean).join(' '), phone, comment: v('comment') };
   const text = summary(who), btn = f.querySelector('.bac-send'), done = $('done');
