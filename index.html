@@ -204,6 +204,8 @@
 .bac-sum{border-radius:16px;padding:20px;background:#23201d;color:#fff}
 .bac-sum h3{margin:0 0 10px;font-size:16px;font-weight:800}
 .bac-total{font-size:44px;font-weight:800;letter-spacing:-.02em;line-height:1}
+.bac-round{margin:8px 0 0;font-size:13px;color:#cfc6ba}
+.bac-round b{color:var(--ac2)}
 .bac-total small{font-size:18px;font-weight:600;margin-left:6px;color:#cfc6ba}
 .bac-break{width:100%;border-collapse:collapse;margin-top:14px;font-size:14px;color:#d9d1c6}
 .bac-break th{text-align:left;font-weight:600;padding:6px 0}
@@ -378,6 +380,7 @@
   <div class="bac-sum">
     <h3>Итого за заказ</h3>
     <div class="bac-total" data-bac="total">0<small>руб.</small></div>
+    <p class="bac-round" data-bac="round"></p>
     <table class="bac-break"><tbody data-bac="break"></tbody></table>
     <p class="bac-water"><b>Заказчик уведомлён, что ЛДСП, ДВП, МДФ и постформинг не предназначены для влажных помещений</b> и требуют немедленного удаления воды и иных жидкостей с поверхности, торцов, кромок и стыков изделий. Исполнитель не несёт ответственности за разбухание, деформацию, расслоение или иные повреждения, возникшие вследствие попадания воды, пара, конденсата, повышенной влажности либо иного нарушения Заказчиком условий эксплуатации материалов.</p>
     <form class="bac-form" data-bac="form" novalidate>
@@ -490,14 +493,16 @@ function groups() {
     x.base = x.parts.reduce((a, p) => a + area1(p) * p.qty * priceM2(p), 0);
     x.edgeM = x.parts.reduce((a, p) => a + edgeMm(p) / 1000 * p.qty, 0);
     x.k = koefFor(x.area); x.plate = r2(x.base * x.k); x.edge = r2(x.edgeM * CFG.edgePriceM);
+    // итог цвета — до целого рубля в меньшую сторону, в пользу клиента (Никита 18.11: 68,99 → 68)
+    x.sum = Math.floor(r2(x.plate + x.edge) + 1e-9);
   }
   return g;
 }
 function calc() {
   const G = groups(), m = { ldsp: { area: 0, plate: 0, edge: 0, edgeM: 0, n: 0 }, dvp: { area: 0, plate: 0, edge: 0, edgeM: 0, n: 0 } };
   for (const g of G) { const x = m[g.mat]; x.area += g.area; x.plate = r2(x.plate + g.plate); x.edge = r2(x.edge + g.edge); x.edgeM += g.edgeM; x.n += g.parts.length; }
-  const total = r2(m.ldsp.plate + m.ldsp.edge + m.dvp.plate + m.dvp.edge);
-  return { m, groups: G, area: m.ldsp.area + m.dvp.area, total, edgeM: m.ldsp.edgeM + m.dvp.edgeM };
+  const exact = r2(m.ldsp.plate + m.ldsp.edge + m.dvp.plate + m.dvp.edge), total = G.reduce((a, g) => a + g.sum, 0);
+  return { m, groups: G, area: m.ldsp.area + m.dvp.area, total, exact, edgeM: m.ldsp.edgeM + m.dvp.edgeM };
 }
 function summary(who) {
   const r = calc(), out = ['Заявка с калькулятора ba-raspil.by (размеры X×Y готовые, с кромкой; X — вдоль текстуры)'];
@@ -510,7 +515,7 @@ function summary(who) {
   for (const [id, x] of Object.entries(r.m)) if (x.n) {
     out.push(`${CFG.mat[id].name}: ${fmt(x.area, 3)} м² — ${fmt(x.plate)} руб.${id === 'dvp' ? ', без кромки' : `; кромка ${fmt(x.edgeM, 2)} м.п. — ${fmt(x.edge)} руб.`}`);
   }
-  out.push(`ИТОГО: ${fmt(r.total)} руб.`);
+  out.push(`ИТОГО: ${fmt(r.total, 0)} руб. (округлено до рубля в меньшую сторону${r.exact !== r.total ? `, без округления ${fmt(r.exact)}` : ''})`);
   return out.join('\n');
 }
 
@@ -635,7 +640,8 @@ function renderOrder() {
     </tbody></table>${upsell(g)}</div>`;
   }).join('');
 
-  $('total').innerHTML = `${fmt(r.total)}<small>руб.</small>`;
+  $('total').innerHTML = `${fmt(r.total, 0)}<small>руб.</small>`;
+  $('round').innerHTML = `Округляем до целого рубля <b>в меньшую сторону — в вашу пользу</b>${r.exact !== r.total ? `: без округления было бы ${fmt(r.exact)} руб.` : '.'}`;
   $('break').innerHTML = ['ldsp', 'dvp'].filter(id => r.m[id].n).map(id => {
     const x = r.m[id], nm = CFG.mat[id].name;
     return `<tr class="bac-mhead"><th>${nm}</th><td>${fmt(x.area, 2)} м²</td><td class="r">${fmt(x.plate)} руб.</td></tr>`
@@ -815,11 +821,11 @@ function orderTable(doc, X, G, start) {
     // цена м² с коэффициентом блока (<1 м² ×1,5; 1–3 ×1,3) — формулой, чтобы Павел видел, откуда цифра
     const a = sect('раскрой', 'площадь Sр кв.м', 'цена за кв.м', 'I', g.area, r4(pm * k), k === 1 ? `${pm}` : `${pm}*${k}`);
     const b = sect('кромкование', 'длина Рк м/п', 'цена за м/п', 'L', g.edgeM, CFG.edgePriceM, `${CFG.edgePriceM}`);
-    box('A', r, 'H', r, G.length > 1 ? 'ИТОГО по цвету' : 'ИТОГО', X.lbl); box('I', r, 'K', r, { f: `${a}+${b}`, v: r4(g.plate + g.edge) }, X.ynum); box('L', r, 'N', r, 'руб', X.ytxt);
+    box('A', r, 'H', r, G.length > 1 ? 'ИТОГО по цвету' : 'ИТОГО', X.lbl); box('I', r, 'K', r, { f: `ROUNDDOWN(${a}+${b},0)`, v: g.sum }, X.ynum); box('L', r, 'N', r, 'руб', X.ytxt);
     totals.push(`I${r}`); r += 2;
   }
   r--;   // общий итог — сразу под последним блоком, без пустой строки
-  if (G.length > 1) { box('A', r, 'H', r, 'ИТОГО по заказу', X.lbl); box('I', r, 'K', r, { f: totals.join('+'), v: r4(G.reduce((s, g) => s + g.plate + g.edge, 0)) }, X.ynum); box('L', r, 'N', r, 'руб', X.ytxt); r++; }
+  if (G.length > 1) { box('A', r, 'H', r, 'ИТОГО по заказу', X.lbl); box('I', r, 'K', r, { f: totals.join('+'), v: G.reduce((s, g) => s + g.sum, 0) }, X.ynum); box('L', r, 'N', r, 'руб', X.ytxt); r++; }
   return r - 1;
 }
 async function buildXlsx(who) {
