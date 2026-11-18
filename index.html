@@ -471,12 +471,18 @@ const area1 = p => p.L * p.W / 1e6;
 // Цвет кромки: сначала в цвет материала (eArt = null), можно выбрать любой декор того же производителя (Никита 18.11). Цена кромки одна.
 const edgeArt = p => p.eArt || p.art;
 const edgeColor = p => p.eArt ? `${decorOf({ art: p.eArt }).name} ${p.eArt}` : 'в цвет материала';
+// В заявке цвет кромки всегда полностью — название, артикул, структура, даже если как у плиты: «Белый 601 PE», не «в цвет» (Никита 18.11).
+// Структура кромки: как у плиты, если у декора кромки такая есть, иначе его первая.
+function edgeFull(p) {
+  const d = decorOf({ art: edgeArt(p) }), st = d.st.includes(p.st) ? p.st : d.st[0];
+  return `${d.name} ${d.art} ${st}`;
+}
 function edgeColorsOf(g) {   // для блока цвета в заявке: один цвет кромки на всех или по деталям
   const ps = g.parts.filter(p => edgeMm(p));
   if (!ps.length) return 'без кромки';
-  const u = [...new Set(ps.map(p => p.eArt || ''))];
-  if (u.length === 1) return u[0] ? edgeColor(ps[0]) : 'в цвет';
-  return g.parts.map((p, i) => edgeMm(p) ? `${i + 1}) ${p.eArt ? edgeColor(p) : 'в цвет'}` : null).filter(Boolean).join('; ');
+  const u = [...new Set(ps.map(edgeFull))];
+  if (u.length === 1) return u[0];
+  return g.parts.map((p, i) => edgeMm(p) ? `${i + 1}) ${edgeFull(p)}` : null).filter(Boolean).join('; ');
 }
 
 // Стороны L1/L2 идут вдоль X (длина), W1/W2 — вдоль Y (ширина). X — направление текстуры (Никита 18.11), поэтому X бывает и короче Y:
@@ -520,7 +526,7 @@ function summary(who) {
   if (who) out.push(`Заказчик: ${who.fio}`, `Телефон: ${who.phone}`, ...(who.comment ? [`Комментарий: ${who.comment}`] : []));
   for (const g of r.groups) {
     out.push('', `${colorFull(g.parts[0])} — ${fmt(g.area, 3)} м², ${fmt(g.plate)} руб.`);
-    g.parts.forEach((p, i) => out.push(`${i + 1}) ${p.L}×${p.W} мм, ${p.qty} шт.${p.mat === 'dvp' ? '' : `, кромка: ${edgeText(p)}${edgeMm(p) ? `, цвет кромки: ${edgeColor(p)}` : ''}`} — ${fmt(area1(p) * p.qty, 3)} м²`));
+    g.parts.forEach((p, i) => out.push(`${i + 1}) ${p.L}×${p.W} мм, ${p.qty} шт.${p.mat === 'dvp' ? '' : `, кромка: ${edgeText(p)}${edgeMm(p) ? `, цвет кромки: ${edgeFull(p)}` : ''}`} — ${fmt(area1(p) * p.qty, 3)} м²`));
   }
   out.push('');
   for (const [id, x] of Object.entries(r.m)) if (x.n) {
@@ -862,7 +868,10 @@ async function buildXlsx(who) {
   wrapXf.insertBefore(al, wrapXf.firstChild); wrapXf.setAttribute('applyAlignment', '1'); xfs.appendChild(wrapXf); xfs.setAttribute('count', xfs.children.length);
   save('xl/styles.xml', stl);
   setCell(s1, 'A9', 'Основные материалы:');
-  setCell(s1, 'D9', G.map(g => `${colorFull(g.parts[0])} — ${fmt(g.area, 2)} м²${g.mat === 'dvp' ? '' : `, кромка ${fmt(g.edgeM, 2)} м.п.${g.edgeM ? ` (${edgeColorsOf(g)})` : ''}`}`).join('\n') + `\nЗаявка с сайта${who.comment ? '. Комментарий: ' + who.comment : ''}`, xfs.children.length - 1);
+  // строка на цвет — коротко, чтобы влезала в одну строку рамки: «ЛДСП BYSPAN Белый 601 PE — 1,98 м², кромка Белый 601 PE 12,65 м.п.»
+  const p0 = g => g.parts[0], mline = g => g.mat === 'dvp' ? `ДВП белая ${fmtT(CFG.mat.dvp.t)} мм — ${fmt(g.area, 2)} м²`
+    : `ЛДСП ${brandOf(p0(g).brand).name} ${decorOf(p0(g)).name} ${p0(g).art} ${p0(g).st} — ${fmt(g.area, 2)} м², ${g.edgeM ? `кромка ${edgeColorsOf(g)} ${fmt(g.edgeM, 2)} м.п.` : 'без кромки'}`;
+  setCell(s1, 'D9', G.map(mline).join('\n') + `\nЗаявка с сайта${who.comment ? '. Комментарий: ' + who.comment : ''}`, xfs.children.length - 1);
   const t = orderTable(s1, G, 23);
   // число записано сразу — в «Защищённом просмотре» Excel формулы не пересчитывает
   setCell(s1, 'Q13', { f: t.total, v: r.total }); setCell(s1, 'Q15', { f: 'Q13+Q14', v: r.total }); setCell(s1, 'Q18', { f: 'Q15-Q17', v: r.total });
