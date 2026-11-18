@@ -854,6 +854,15 @@ async function buildXlsx(who) {
   const s1 = load('xl/worksheets/sheet1.xml');
   setCell(s1, 'B5', who.fio); setCell(s1, 'B6', who.phone); setCell(s1, 'B7', null);
   setCell(s1, 'I5', '?'); setCell(s1, 'I6', '?'); setCell(s1, 'M5', 0);
+  // «Основные материалы» (A9, D9:M13) — как раньше: на каждый цвет строка с площадью и кромкой (Никита 18.11). Стиль D9 + перенос строк сверху.
+  const stl = load('xl/styles.xml'), xfs = stl.getElementsByTagNameNS(NS, 'cellXfs')[0], d9 = [...s1.getElementsByTagNameNS(NS, 'c')].find(c => c.getAttribute('r') === 'D9');
+  const wrapXf = xfs.children[+(d9 && d9.getAttribute('s')) || 0].cloneNode(true);
+  [...wrapXf.getElementsByTagNameNS(NS, 'alignment')].forEach(a => a.remove());
+  const al = stl.createElementNS(NS, 'alignment'); al.setAttribute('wrapText', '1'); al.setAttribute('vertical', 'top');
+  wrapXf.insertBefore(al, wrapXf.firstChild); wrapXf.setAttribute('applyAlignment', '1'); xfs.appendChild(wrapXf); xfs.setAttribute('count', xfs.children.length);
+  save('xl/styles.xml', stl);
+  setCell(s1, 'A9', 'Основные материалы:');
+  setCell(s1, 'D9', G.map(g => `${colorFull(g.parts[0])} — ${fmt(g.area, 2)} м²${g.mat === 'dvp' ? '' : `, кромка ${fmt(g.edgeM, 2)} м.п.${g.edgeM ? ` (${edgeColorsOf(g)})` : ''}`}`).join('\n') + `\nЗаявка с сайта${who.comment ? '. Комментарий: ' + who.comment : ''}`, xfs.children.length - 1);
   const t = orderTable(s1, G, 23);
   // число записано сразу — в «Защищённом просмотре» Excel формулы не пересчитывает
   setCell(s1, 'Q13', { f: t.total, v: r.total }); setCell(s1, 'Q15', { f: 'Q13+Q14', v: r.total }); setCell(s1, 'Q18', { f: 'Q15-Q17', v: r.total });
