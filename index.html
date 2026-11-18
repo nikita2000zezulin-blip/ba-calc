@@ -221,6 +221,7 @@
 .bac-break tr{border-bottom:1px solid rgba(255,255,255,.09)}
 .bac-break tr.bac-mhead th{color:#fff;font-weight:800;padding-top:12px}
 .bac-break tr.bac-sub th{padding-left:12px;font-weight:500}
+.bac-break tr.bac-mtot th,.bac-break tr.bac-mtot td{border-top:1px solid rgba(255,255,255,.18);font-weight:800;color:#fff}
 .bac-gup{margin-top:10px;border-radius:12px;background:#fbf7f2;border:1px solid #f1e7da;padding:12px 14px}
 .bac-gup p{margin:0;font-size:13.5px;color:#4a433d}
 .bac-gup p b{color:#c24a14}
@@ -530,7 +531,7 @@ function summary(who) {
   }
   out.push('');
   for (const [id, x] of Object.entries(r.m)) if (x.n) {
-    out.push(`${CFG.mat[id].name}: ${fmt(x.area, 3)} м² — ${fmt(x.plate)} руб.${id === 'dvp' ? ', без кромки' : `; кромка ${fmt(x.edgeM, 2)} м.п. — ${fmt(x.edge)} руб.`}`);
+    out.push(`${CFG.mat[id].name}: ${fmt(x.area, 3)} м² — ${fmt(x.plate)} руб.${id === 'dvp' ? ', без кромки' : `; кромка ${fmt(x.edgeM, 2)} м.п. — ${fmt(x.edge)} руб.; итого ЛДСП ${fmt(r2(x.plate + x.edge))} руб.`}`);
   }
   out.push(`ИТОГО: ${fmt(r.total, 0)} руб. (округлено до рубля в меньшую сторону${r.exact !== r.total ? `, без округления ${fmt(r.exact)}` : ''})`);
   return out.join('\n');
@@ -663,7 +664,8 @@ function renderOrder() {
   $('break').innerHTML = ['ldsp', 'dvp'].filter(id => r.m[id].n).map(id => {
     const x = r.m[id], nm = CFG.mat[id].name;
     return `<tr class="bac-mhead"><th>${nm}</th><td>${fmt(x.area, 2)} м²</td><td class="r">${fmt(x.plate)} руб.</td></tr>`
-      + (id === 'dvp' ? '' : `<tr class="bac-sub"><th>Кромка ${nm}</th><td>${fmt(x.edgeM, 2)} м.п.</td><td class="r">${fmt(x.edge)} руб.</td></tr>`);
+      + (id === 'dvp' ? '' : `<tr class="bac-sub"><th>Кромка ${nm}</th><td>${fmt(x.edgeM, 2)} м.п.</td><td class="r">${fmt(x.edge)} руб.</td></tr>
+        <tr class="bac-mtot"><th>Итого ${nm}</th><td></td><td class="r">${fmt(r2(x.plate + x.edge))} руб.</td></tr>`);
   }).join('');
 }
 function renderAdd() {
@@ -816,7 +818,7 @@ function orderTable(doc, G, start) {
     for (const col of TCOLS) { const s = S[col + tr], v = vals[col]; if (s == null && v == null) continue; setCell(doc, col + r, v == null ? null : v, s == null ? null : s); }
     if (r > 41 && HT[tr]) { const row = [...sd.children].find(x => x.getAttribute('r') === String(r)); if (row) { row.setAttribute('ht', HT[tr]); row.setAttribute('customHeight', '1'); } }
   };
-  let r = start; const totals = [];
+  let r = start; const totals = [], byMat = {};
   for (const g of G) {
     const p0 = g.parts[0], ld = g.mat === 'ldsp', k = g.k, pm = priceM2(p0);
     put(r, 23, { B: ld ? 'цвет ЛДСП' : 'цвет ДВП', C: ld ? `${decorOf(p0).name} ${p0.art} ${p0.st}` : `белая ${fmtT(CFG.mat.dvp.t)} мм` }); merge(`C${r}:F${r}`); merge(`G${r}:H${r}`); r++;
@@ -844,10 +846,18 @@ function orderTable(doc, G, start) {
     put(r, 35); r++;
     // итог цвета при нескольких цветах — точный; вниз до рубля округляем только конечный итог (Никита 18.11: 142,07 → 142)
     put(r, 36, { B: G.length > 1 ? 'ИТОГО по цвету' : 'ИТОГО', F: G.length > 1 ? { f: `${a}+${b}`, v: g.sum } : { f: `ROUNDDOWN(${a}+${b},0)`, v: Math.floor(g.sum + 1e-9) }, H: 'руб' }); merge(`B${r}:E${r}`); merge(`F${r}:G${r}`);
-    totals.push(`F${r}`); r += 2;
+    totals.push(`F${r}`); (byMat[g.mat] = byMat[g.mat] || []).push({ ref: `F${r}`, v: g.sum }); r += 2;
   }
-  r--;   // общий итог — сразу под последним блоком
-  if (G.length > 1) { put(r, 36, { B: 'ИТОГО по заказу', F: { f: `ROUNDDOWN(${totals.join('+')},0)`, v: calc().total }, H: 'руб' }); merge(`B${r}:E${r}`); merge(`F${r}:G${r}`); totals.push(`F${r}`); r++; }
+  r--;   // общие итоги — сразу под последним блоком
+  // в заказе и ЛДСП, и ДВП — сначала итог каждого материала (точный), потом общий (Никита 18.11)
+  let fin = totals;
+  if (byMat.ldsp && byMat.dvp) {
+    fin = ['ldsp', 'dvp'].map(id => {
+      put(r, 36, { B: `ИТОГО ${CFG.mat[id].name}`, F: { f: byMat[id].map(x => x.ref).join('+'), v: r4(byMat[id].reduce((s, x) => s + x.v, 0)) }, H: 'руб' }); merge(`B${r}:E${r}`); merge(`F${r}:G${r}`);
+      return `F${r++}`;
+    });
+  }
+  if (G.length > 1) { put(r, 36, { B: 'ИТОГО по заказу', F: { f: `ROUNDDOWN(${fin.join('+')},0)`, v: calc().total }, H: 'руб' }); merge(`B${r}:E${r}`); merge(`F${r}:G${r}`); totals.push(`F${r}`); r++; }
   return { last: r - 1, total: totals[totals.length - 1] };
 }
 async function buildXlsx(who) {
