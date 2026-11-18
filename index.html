@@ -191,6 +191,13 @@
    .bac .bac-add — сильнее общего «.bac button{color:inherit}», иначе надпись тёмная */
 .bac .bac-add{display:grid;gap:3px;justify-items:center;border:0;background:linear-gradient(180deg,#ff7a33,#ef5b1e);color:#fff;border-radius:14px;padding:14px 16px 13px;cursor:pointer;width:100%;
   box-shadow:0 10px 24px rgba(239,91,30,.3);animation:bac-call 2.2s ease-out infinite}
+.bac-edgebox{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.bac-esub{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin:0 0 10px;font-size:16px;font-weight:800;color:var(--ink)}
+.bac-esub span{font-size:13px;font-weight:600;color:var(--mute)}
+.bac-box .bac-add{margin-top:16px}
+.bac .bac-add:disabled{background:#e6e1da;color:#5f5852;box-shadow:none;animation:none;cursor:not-allowed}
+.bac .bac-add:disabled small{color:#6f6861;font-weight:500}
+.bac-noparts{border:1px dashed #cfc7bb;border-radius:14px;padding:18px;text-align:center;color:var(--mute);font-size:14px;background:#fff}
 .bac-add b{font-size:17px;font-weight:800;letter-spacing:.01em}
 .bac-add small{font-size:13px;font-weight:600;color:#ffe8da}
 .bac-add:hover{background:linear-gradient(180deg,#ff8a45,#f2621f)}
@@ -249,7 +256,7 @@
 .bac-err:empty{display:none}
 @media (max-width:1024px){.bac-guide{grid-template-columns:1fr 1fr}.bac-guide li.bac-rule{grid-column:1/-1}}
 @media (max-width:900px){.bac{padding:20px 14px;border-radius:0}.bac-main,.bac-bottom{grid-template-columns:1fr}.bac-stage{position:relative;top:0;min-height:360px}
-  .bac-main{gap:12px}.bac-panel{display:contents}.bac-stage{order:1}.bac-panel>.bac-box:nth-child(n+3){order:2}
+  .bac-main{gap:12px}.bac-panel{display:contents}.bac-stage{order:1}.bac-panel>.bac-box:nth-child(n+2){order:2}
   .bac-top{flex-direction:column;gap:10px}}
 @media (max-width:700px){
   .bac-drop{position:fixed;inset:0;z-index:2147483000;border-radius:0;border:0;max-height:none;box-shadow:none}
@@ -286,7 +293,7 @@
   <li>Выберите материал: однотонный или древоподобный</li>
   <li>Введите габариты детали (длина X и ширина Y), <b class="bac-t18">толщина материала 18&nbsp;мм</b></li>
   <li>Укажите стороны нанесения кромки</li>
-  <li>Укажите количество деталей и отправьте расчёт</li>
+  <li>Нажмите «Добавить деталь», укажите количество и отправьте расчёт</li>
   <li class="bac-rule"><b>Главное правило.</b> Пишите готовый размер детали. Кромка его не меняет: деталь 2700 мм с кромкой — это 2700 мм, не 2701. Кромку мы учтём при распиле сами.</li>
 </ol>
 
@@ -339,7 +346,7 @@
     </fieldset>
 
     <fieldset class="bac-box">
-      <legend><i>2</i>Габариты детали <span data-bac="maxNote"></span></legend>
+      <legend><i>2</i>Габариты детали и кромка <span data-bac="maxNote"></span></legend>
       <div class="bac-dims">
         <label class="bac-field" for="bac-L"><span>Длина<b class="bac-ax">X</b></span>
           <div class="bac-num"><input id="bac-L" type="number" inputmode="numeric" data-bac="L"><span>мм</span></div>
@@ -350,10 +357,8 @@
       </div>
       <p class="bac-grain" data-bac="grainNote" hidden></p>
       <p class="bac-warn" data-bac="warn"></p>
-    </fieldset>
-
-    <fieldset class="bac-box" data-bac="edgeBox">
-      <legend><i>3</i>Кромка <span data-bac="edgePrice"></span></legend>
+      <div class="bac-edgebox" data-bac="edgeBox">
+      <p class="bac-esub">Кромка <span data-bac="edgePrice"></span></p>
       <p class="bac-tap"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11.2V5.5a1.8 1.8 0 0 1 3.6 0v4.6l4.9.9a2.2 2.2 0 0 1 1.8 2.5l-.8 5.3A3.2 3.2 0 0 1 15.3 21H11a3 3 0 0 1-2.4-1.2l-3.3-4.5a1.6 1.6 0 0 1 2.4-2.1L9 14.4z"/></svg><span><b>Нажмите на любую сторону детали</b> — на схеме или прямо на 3D-плите. Нажали ещё раз — кромка снята.</span></p>
       <div class="bac-edge">
         <svg viewBox="0 0 240 150" data-bac="edgeSvg" aria-label="Схема кромки: нажмите на сторону"></svg>
@@ -367,6 +372,8 @@
       <div class="bac-pick" data-bac="ePick">
         <button type="button" class="bac-pickbtn" data-bac="ePickBtn" aria-haspopup="listbox" aria-expanded="false"></button>
       </div>
+      </div>
+      <button type="button" class="bac-add" data-bac="add"></button>
     </fieldset>
   </div>
 </div>
@@ -374,7 +381,6 @@
 <div class="bac-bottom">
   <div class="bac-groups">
     <div class="bac-groups" data-bac="groups"></div>
-    <button type="button" class="bac-add" data-bac="add"><b>+ Добавить ещё деталь</b><small>Соберите весь заказ в одну заявку</small></button>
   </div>
 
   <div class="bac-sum">
@@ -413,7 +419,7 @@ const CFG = Object.assign({
   edgePriceM: 3,                 // руб. за погонный метр кромки BYSPAN — подтверждено 18.11 (Никита); ДВП-кромка — уточняется
   mat: {
     ldsp: { name: 'ЛДСП', t: 18, maxL: 2780, maxW: 2050 },
-    dvp: { name: 'ДВП', t: 3.2, maxL: 2490, maxW: 2060, priceM2: 10 }   // ДВП белая; priceM2 — УСЛОВНО
+    dvp: { name: 'ДВП', t: 3.2, maxL: 2490, maxW: 2060, priceM2: 12 }   // ДВП белая, 12 руб./м² (Никита 18.11), коэффициенты те же
   }
 }, window.BA_CALC_CONFIG || {});
 // Коэффициент по площади всего заказа: меньше 1 м² — ×1,5; от 1 до 3 м² — ×1,3; больше 3 м² — ×1. Клиенту коэффициент не показываем.
@@ -448,8 +454,14 @@ const brandOf = id => BRANDS.find(b => b.id === id);
 /* ---------- состояние ---------- */
 let uid = 1;
 const newPart = (o = {}) => Object.assign({ id: uid++, mat: 'ldsp', brand: 'byspan', art: DECORS[0].art, st: DECORS[0].st[0], L: 1200, W: 600, qty: 1, eArt: null, edges: { L1: true, L2: false, W1: false, W2: false } }, o);
-const parts = [newPart()];
-let active = parts[0];
+// active — заготовка: то, что клиент сейчас настраивает (её видно на 3D). parts — добавленные детали, сначала пусто.
+// Деталь с точно такими же характеристиками уже в заказе — кнопка «Добавить» серая и не нажимается, количество меняют в таблице.
+const parts = [];
+let active = newPart();
+const snap = p => ({ mat: p.mat, brand: p.brand, art: p.art, st: p.st, eArt: p.eArt, L: p.L, W: p.W, edges: { ...p.edges } });
+const specKey = p => p.mat === 'dvp' ? `dvp:${p.L}x${p.W}`
+  : [p.brand, p.art, p.st, p.L, p.W, ...['L1', 'L2', 'W1', 'W2'].map(k => p.edges[k] ? 1 : 0), edgeMm(p) ? p.eArt || '' : ''].join(':');
+const addedLike = p => parts.find(x => specKey(x) === specKey(p));
 
 const colorKey = p => p.mat === 'dvp' ? 'dvp' : `${p.brand}:${p.art}:${p.st}`;
 const colorName = p => p.mat === 'dvp' ? 'ДВП белая 3,2 мм' : `${decorOf(p).name} ${p.art} ${p.st}`;
@@ -628,19 +640,20 @@ function upsell(g) {
 }
 function renderOrder() {
   const r = calc();
-  $('groups').innerHTML = r.groups.map(g => {
+  $('groups').innerHTML = !parts.length ? '<div class="bac-noparts">Деталей пока нет. Выберите материал, размеры и кромку — и нажмите «Добавить деталь».</div>' : r.groups.map(g => {
     const ld = g.mat === 'ldsp';   // у ДВП столбца «Кромка» нет
     return `<div class="bac-group"><div class="bac-ghead"><h3>Детали в расчёте</h3>${chipOf(g.parts[0])}<span class="bac-garea">${fmt(g.area, 2)} м² · ${fmt(g.plate)} руб.</span></div>
     <table class="bac-table"><thead><tr><th class="bac-hide">№</th><th>X × Y, мм</th>${ld ? '<th>Кромка</th>' : ''}<th class="c">Шт.</th><th class="r">м²</th><th></th></tr></thead><tbody>
-    ${g.parts.map((p, i) => `<tr data-part="${p.id}" class="${p === active ? 'is-on' : ''}">
+    ${g.parts.map((p, i) => `<tr data-part="${p.id}" class="${specKey(p) === specKey(active) ? 'is-on' : ''}">
       <td class="bac-hide">${i + 1}</td><td><b>${p.L} × ${p.W}</b></td>${ld ? `<td>${edgeText(p)}${p.eArt && edgeMm(p) ? `<small class="bac-ecol">кромка: ${esc(edgeColor(p))}</small>` : ''}</td>` : ''}
       <td class="c"><span class="bac-step"><button type="button" data-dq="-1" data-id="${p.id}" aria-label="Меньше">−</button><input type="number" min="1" max="999" value="${p.qty}" data-qid="${p.id}" aria-label="Количество"><button type="button" data-dq="1" data-id="${p.id}" aria-label="Больше">+</button></span></td>
       <td class="r">${fmt(area1(p) * p.qty, 2)}</td>
-      <td class="r">${parts.length > 1 ? `<button type="button" class="bac-del" data-del="${p.id}" aria-label="Удалить деталь">×</button>` : ''}</td></tr>`).join('')}
+      <td class="r"><button type="button" class="bac-del" data-del="${p.id}" aria-label="Удалить деталь">×</button></td></tr>`).join('')}
     </tbody></table>${upsell(g)}</div>`;
   }).join('');
 
   $('total').innerHTML = `${fmt(r.total, 0)}<small>руб.</small>`;
+  $('round').hidden = !parts.length;
   $('round').innerHTML = `Округляем ${r.groups.length > 1 ? 'итог каждого цвета ' : ''}до целого рубля <b>в меньшую сторону — в вашу пользу</b>${r.exact !== r.total ? `: без округления было бы ${fmt(r.exact)} руб.` : '.'}`;
   $('break').innerHTML = ['ldsp', 'dvp'].filter(id => r.m[id].n).map(id => {
     const x = r.m[id], nm = CFG.mat[id].name;
@@ -648,7 +661,12 @@ function renderOrder() {
       + (id === 'dvp' ? '' : `<tr class="bac-sub"><th>Кромка ${nm}</th><td>${fmt(x.edgeM, 2)} м.п.</td><td class="r">${fmt(x.edge)} руб.</td></tr>`);
   }).join('');
 }
-function update(rebuild = true) { renderPanel(); renderOrder(); if (rebuild && view3d) view3d.sync(); }
+function renderAdd() {
+  const b = $('add'), dup = addedLike(active);
+  b.disabled = !!dup;
+  b.innerHTML = `<b>+ ${parts.length ? 'Добавить ещё деталь' : 'Добавить деталь'}</b><small>${dup ? 'Эту деталь вы уже добавили — количество можно изменить в таблице ниже' : 'Соберите весь заказ в одну заявку'}</small>`;
+}
+function update(rebuild = true) { renderPanel(); renderOrder(); renderAdd(); if (rebuild && view3d) view3d.sync(); }
 
 function setSize(key, raw, final) {
   const M = CFG.mat[active.mat], max = key === 'L' ? M.maxL : M.maxW, v = Math.round(+raw);
@@ -684,7 +702,7 @@ function setMat(mat) {
 }
 function toggleEdge(k) { if (active.mat === 'dvp') return; active.edges[k] = !active.edges[k]; update(); if (view3d) view3d.pulse(k); }
 root.addEventListener('click', e => {
-  const t = e.target.closest('[data-mat],[data-brand],[data-art],[data-st],[data-kind],[data-edge],[data-edges],[data-dq],[data-qid],[data-del],[data-part],[data-view],[data-bac="add"],[data-addfrom],[data-bac="pickBtn"],[data-bac="ePickBtn"],[data-bac="dropClose"]');
+  const t = e.target.closest('[data-mat],[data-brand],[data-art],[data-st],[data-kind],[data-edge],[data-edges],[data-dq],[data-qid],[data-del],[data-part],[data-view],[data-bac="add"],[data-bac="pickBtn"],[data-bac="ePickBtn"],[data-bac="dropClose"]');
   if (!t) return;
   const d = t.dataset;
   if (d.mat) setMat(d.mat);
@@ -704,15 +722,14 @@ root.addEventListener('click', e => {
   else if (d.edges) { const v = d.edges === 'all'; ['L1', 'L2', 'W1', 'W2'].forEach(k => active.edges[k] = v); update(); }
   else if (d.dq) { const p = parts.find(x => x.id === +d.id); p.qty = clamp(p.qty + +d.dq, 1, 999); renderOrder(); }
   else if (d.qid) { /* клик в поле количества — ничего не делаем */ }
-  else if (d.del) { const i = parts.findIndex(p => p.id === +d.del); parts.splice(i, 1); if (!parts.includes(active)) active = parts[Math.max(0, i - 1)]; update(); }
-  else if (d.part) { active = parts.find(p => p.id === +d.part); $('warn').textContent = ''; update(); }
+  else if (d.del) { parts.splice(parts.findIndex(p => p.id === +d.del), 1); update(false); }
+  else if (d.part) { const p = parts.find(x => x.id === +d.part); active = Object.assign(newPart(), snap(p)); $('warn').textContent = ''; update(); }
   else if (d.view) { view3d && view3d.setView(d.view); }
-  else if (d.bac === 'add' || d.addfrom) {
-    const src = d.addfrom ? parts.find(p => p.id === +d.addfrom) : active;
-    active = newPart({ mat: src.mat, brand: src.brand, art: src.art, st: src.st, eArt: src.eArt, L: src.L, W: src.W, edges: { ...src.edges }, fresh: { L: true, W: true } });
-    parts.push(active); update();
-    root.querySelector('.bac-main').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
-    setTimeout(() => inL.focus({ preventScroll: true }), reduce ? 0 : 450);
+  else if (d.bac === 'add') {
+    if (addedLike(active)) return;
+    parts.push(Object.assign(newPart(), snap(active)));
+    active.fresh = { L: true, W: true };   // следующая деталь: нажатие на длину или ширину очищает поле
+    update(false);
   }
 });
 root.addEventListener('change', e => {
@@ -884,6 +901,7 @@ $('form').addEventListener('submit', async e => {
   const err = m => { $('err').textContent = m; };
   if (!v('last') || !v('first')) return err('Напишите фамилию и имя — они нужны для договора.');
   if (!/^\+375\d{9}$/.test(phone)) return err('Допишите номер после +375: код и 7 цифр, например 44 123-45-67.');
+  if (!parts.length) return err('Добавьте хотя бы одну деталь — кнопка «Добавить деталь» в блоке «Габариты детали и кромка».');
   if (!f.elements.agree.checked) return err('Отметьте, что все размеры проверены вами лично.');
   err('');
   const who = { fio: [v('last'), v('first'), v('middle')].filter(Boolean).join(' '), phone, comment: v('comment') };
@@ -914,7 +932,7 @@ $('form').addEventListener('submit', async e => {
   done.querySelector('pre').textContent = text;
   btn.disabled = false;
 });
-window.baCalc = { summary, calc, parts, groups, buildXlsx, config: CFG };
+window.baCalc = { summary, calc, parts, groups, buildXlsx, config: CFG, get active() { return active; } };
 
 update(false);
 
