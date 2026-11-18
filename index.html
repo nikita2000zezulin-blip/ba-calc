@@ -705,7 +705,7 @@ function setCell(doc, ref, val, style) {
   while (c.firstChild) c.removeChild(c.firstChild);
   if (style != null) c.setAttribute('s', style);
   if (val == null) { c.removeAttribute('t'); return; }
-  if (typeof val === 'object') { c.removeAttribute('t'); const f = doc.createElementNS(NS, 'f'); f.textContent = val.f; c.appendChild(f); if (val.v != null) { const v = doc.createElementNS(NS, 'v'); v.textContent = String(val.v); c.appendChild(v); } return; }
+  if (typeof val === 'object') { if (typeof val.v === 'string') c.setAttribute('t', 'str'); else c.removeAttribute('t'); const f = doc.createElementNS(NS, 'f'); f.textContent = val.f; c.appendChild(f); if (val.v != null) { const v = doc.createElementNS(NS, 'v'); v.textContent = String(val.v); c.appendChild(v); } return; }
   if (typeof val === 'number') { c.removeAttribute('t'); const v = doc.createElementNS(NS, 'v'); v.textContent = String(val); c.appendChild(v); }
   else { c.setAttribute('t', 'inlineStr'); const is = doc.createElementNS(NS, 'is'), t = doc.createElementNS(NS, 't'); t.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve'); t.textContent = val; is.appendChild(t); c.appendChild(is); }
 }
@@ -785,6 +785,8 @@ async function buildXlsx(who) {
   setCell(s1, 'B5', who.fio); setCell(s1, 'B6', who.phone);
   setCell(s1, 'D9', G.map(g => `${colorFull(g.parts[0])} — ${fmt(gArea(g), 2)} м², кромка ${fmt(gEdge(g), 2)} м.п.`).join('\n') + `\nЗаявка с сайта${who.comment ? '. Комментарий: ' + who.comment : ''}`, WRAP);
   setCell(s1, 'Q13', r.total);
+  // общая стоимость = услуги + фурнитура (фурнитуру заказчик впишет в Q14); число записано сразу — в «Защищённом просмотре» Excel формулы не пересчитывает
+  setCell(s1, 'Q15', { f: 'Q13+Q14', v: r.total }); setCell(s1, 'Q18', { f: 'Q15-Q17', v: r.total }); setCell(s1, 'O25', { f: 'B5', v: who.fio });
   const last = orderTable(s1, X, G, 22);
   if (last > 54) { const wbx = load('xl/workbook.xml'); [...wbx.getElementsByTagNameNS(NS, 'definedName')].filter(d => d.getAttribute('name') === '_xlnm.Print_Area' && /Договор/.test(d.textContent)).forEach(d => { d.textContent = d.textContent.replace(/\$54$/, '$' + last); }); save('xl/workbook.xml', wbx); }
   save('xl/worksheets/sheet1.xml', s1);
