@@ -704,8 +704,64 @@ function setCell(doc, ref, val, style) {
   if (!c) { c = doc.createElementNS(NS, 'c'); c.setAttribute('r', ref); r.insertBefore(c, [...r.children].find(x => colNum(x.getAttribute('r').replace(/\d+/, '')) > colNum(col)) || null); }
   while (c.firstChild) c.removeChild(c.firstChild);
   if (style != null) c.setAttribute('s', style);
+  if (val == null) { c.removeAttribute('t'); return; }
+  if (typeof val === 'object') { c.removeAttribute('t'); const f = doc.createElementNS(NS, 'f'); f.textContent = val.f; c.appendChild(f); if (val.v != null) { const v = doc.createElementNS(NS, 'v'); v.textContent = String(val.v); c.appendChild(v); } return; }
   if (typeof val === 'number') { c.removeAttribute('t'); const v = doc.createElementNS(NS, 'v'); v.textContent = String(val); c.appendChild(v); }
   else { c.setAttribute('t', 'inlineStr'); const is = doc.createElementNS(NS, 'is'), t = doc.createElementNS(NS, 't'); t.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve'); t.textContent = val; is.appendChild(t); c.appendChild(is); }
+}
+// Таблица Павла («Таблица для Никиты.xlsx», 18.11) в левой части «Договора»: на каждый цвет — цвет, кромка, детали, раскрой, кромкование, итого.
+// Строк ровно по числу деталей. Формулы как у Павла (S = X·Y·шт/10⁶, Рк = (X·Кр + Y·Кр)·шт/1000), значения посчитаны сразу.
+function addTableStyles(stl, P) {
+  const add = (tag, xml) => { const box = stl.getElementsByTagNameNS(NS, tag)[0], el = P.parseFromString(`<x xmlns="${NS}">${xml}</x>`, 'application/xml').documentElement.firstElementChild; box.appendChild(stl.importNode(el, true)); box.setAttribute('count', box.children.length); return box.children.length - 1; };
+  const font = (sz, b) => add('fonts', `<font>${b ? '<b/>' : ''}<sz val="${sz}"/><name val="Calibri"/><family val="2"/><charset val="204"/></font>`);
+  const f8 = font(8), f11 = font(11), f11b = font(11, 1), f12b = font(12, 1), f14b = font(14, 1);
+  const yel = add('fills', '<fill><patternFill patternType="solid"><fgColor rgb="FFFFFF00"/><bgColor indexed="64"/></patternFill></fill>');
+  const t = s => `<${s} style="thin"><color indexed="64"/></${s}>`, bd = add('borders', `<border>${t('left')}${t('right')}${t('top')}${t('bottom')}<diagonal/></border>`);
+  const xf = (f, h, fill = 0, nf = 0) => add('cellXfs', `<xf numFmtId="${nf}" fontId="${f}" fillId="${fill}" borderId="${bd}" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="${h}" vertical="center" wrapText="1"/></xf>`);
+  return { lbl: xf(f12b, 'left'), big: xf(f14b, 'left'), bold: xf(f11b, 'left'), color: xf(f11b, 'left', yel), edge: xf(f11, 'left', yel), hdr: xf(f8, 'center'), val: xf(f11, 'center'), num: xf(f11, 'center', 0, 2), ynum: xf(f11, 'center', yel, 2), ytxt: xf(f11, 'center', yel), empty: xf(f11, 'center') };
+}
+const colStr = n => { let s = ''; for (; n > 0; n = (n - 1) / 26 | 0) s = String.fromCharCode(65 + (n - 1) % 26) + s; return s; };
+function orderTable(doc, X, G, start) {
+  const mc = doc.getElementsByTagNameNS(NS, 'mergeCells')[0], r4 = n => Math.round(n * 1e4) / 1e4;
+  const box = (c1, r1, c2, r2, val, st) => {
+    for (let r = r1; r <= r2; r++) for (let c = colNum(c1); c <= colNum(c2); c++) setCell(doc, colStr(c) + r, r === r1 && c === colNum(c1) ? val : null, st);
+    if (c1 !== c2 || r1 !== r2) { const m = doc.createElementNS(NS, 'mergeCell'); m.setAttribute('ref', `${c1}${r1}:${c2}${r2}`); mc.appendChild(m); mc.setAttribute('count', mc.children.length); }
+  };
+  // колонки Павла → левая половина листа A–N: размер X | Кр | размер Y | Кр | кол-во | площадь Sр | длина Рк
+  const C = [['A', 'B'], ['C', 'C'], ['D', 'E'], ['F', 'F'], ['G', 'H'], ['I', 'K'], ['L', 'N']];
+  const row = (r, vals, st) => vals.forEach((v, i) => box(C[i][0], r, C[i][1], r, v, Array.isArray(st) ? st[i] : st));
+  let r = start; const totals = [];
+  for (const g of G) {
+    const p0 = g.parts[0], ld = g.mat === 'ldsp', k = g.k, pm = priceM2(p0);
+    box('A', r, 'B', r, ld ? 'цвет ЛДСП' : 'цвет ДВП', X.lbl);
+    box('C', r, 'N', r, ld ? `${decorOf(p0).name} ${p0.art} · ${brandOf(p0.brand).name} · структура ${p0.st}` : `белая, ${fmtT(CFG.mat.dvp.t)} мм`, X.color); r++;
+    box('A', r, 'B', r, 'кромка', X.lbl); box('C', r, 'N', r, g.edgeM ? 'в цвет' : 'без кромки', X.edge); r++;
+    row(r, ['размер X', 'Кр', 'размер Y', 'Кр', 'кол-во', 'площадь Sр', 'длина Рк'], X.hdr); r++;
+    const r0 = r;
+    for (const p of g.parts) {
+      const e = edgeCount(p);
+      row(r, [p.L, e.l, p.W, e.w, p.qty, { f: `A${r}*D${r}*G${r}*0.000001`, v: r4(area1(p) * p.qty) }, { f: `((A${r}*C${r})+(D${r}*F${r}))*0.001*G${r}`, v: r4(edgeMm(p) / 1000 * p.qty) }], [X.val, X.val, X.val, X.val, X.val, X.num, X.num]);
+      r++;
+    }
+    const r1 = r - 1, nq = g.parts.reduce((a, p) => a + p.qty, 0);
+    box('A', r, 'F', r, 'Кол-во деталей', X.bold); box('G', r, 'H', r, { f: `SUM(G${r0}:G${r1})`, v: nq }, X.val); box('I', r, 'N', r, null, X.empty); r++;
+    const sect = (name, h1, h2, sumCol, sumV, price, priceF) => {
+      box('A', r, 'D', r + 1, name, X.big);
+      box('E', r, 'H', r, h1, X.hdr); box('I', r, 'K', r, h2, X.hdr); box('L', r, 'N', r, 'всего', X.hdr);
+      box('E', r + 1, 'H', r + 1, { f: `SUM(${sumCol}${r0}:${sumCol}${r1})`, v: r4(sumV) }, X.ynum);
+      box('I', r + 1, 'K', r + 1, { f: priceF, v: price }, X.ynum);
+      box('L', r + 1, 'N', r + 1, { f: `E${r + 1}*I${r + 1}`, v: r4(sumV * price) }, X.ynum);
+      r += 2; return `L${r - 1}`;
+    };
+    // цена м² с коэффициентом блока (<1 м² ×1,5; 1–3 ×1,3) — формулой, чтобы Павел видел, откуда цифра
+    const a = sect('раскрой', 'площадь Sр кв.м', 'цена за кв.м', 'I', g.area, r4(pm * k), k === 1 ? `${pm}` : `${pm}*${k}`);
+    const b = sect('кромкование', 'длина Рк м/п', 'цена за м/п', 'L', g.edgeM, CFG.edgePriceM, `${CFG.edgePriceM}`);
+    box('A', r, 'H', r, G.length > 1 ? 'ИТОГО по цвету' : 'ИТОГО', X.lbl); box('I', r, 'K', r, { f: `${a}+${b}`, v: r4(g.plate + g.edge) }, X.ynum); box('L', r, 'N', r, 'руб', X.ytxt);
+    totals.push(`I${r}`); r += 2;
+  }
+  r--;   // общий итог — сразу под последним блоком, без пустой строки
+  if (G.length > 1) { box('A', r, 'H', r, 'ИТОГО по заказу', X.lbl); box('I', r, 'K', r, { f: totals.join('+'), v: r4(G.reduce((s, g) => s + g.plate + g.edge, 0)) }, X.ynum); box('L', r, 'N', r, 'руб', X.ytxt); r++; }
+  return r - 1;
 }
 async function buildXlsx(who) {
   const files = await unzip(b64(TPL)), P = new DOMParser(), S = new XMLSerializer();
@@ -721,13 +777,16 @@ async function buildXlsx(who) {
   [...wrapXf.getElementsByTagNameNS(NS, 'alignment')].forEach(a => a.remove());
   const al = stl.createElementNS(NS, 'alignment'); al.setAttribute('wrapText', '1'); al.setAttribute('vertical', 'top');
   wrapXf.insertBefore(al, wrapXf.firstChild); wrapXf.setAttribute('applyAlignment', '1'); xfs.appendChild(wrapXf);
-  xfs.setAttribute('count', xfs.children.length); save('xl/styles.xml', stl);
+  xfs.setAttribute('count', xfs.children.length);
   const WRAP = xfs.children.length - 1, PLAIN = 44;   // 44 — обычный стиль столбцов «Заказ-наряда»
+  const X = addTableStyles(stl, P); save('xl/styles.xml', stl);
 
   // Договор: заказчик, телефон, основные материалы, стоимость
   setCell(s1, 'B5', who.fio); setCell(s1, 'B6', who.phone);
   setCell(s1, 'D9', G.map(g => `${colorFull(g.parts[0])} — ${fmt(gArea(g), 2)} м², кромка ${fmt(gEdge(g), 2)} м.п.`).join('\n') + `\nЗаявка с сайта${who.comment ? '. Комментарий: ' + who.comment : ''}`, WRAP);
   setCell(s1, 'Q13', r.total);
+  const last = orderTable(s1, X, G, 22);
+  if (last > 54) { const wbx = load('xl/workbook.xml'); [...wbx.getElementsByTagNameNS(NS, 'definedName')].filter(d => d.getAttribute('name') === '_xlnm.Print_Area' && /Договор/.test(d.textContent)).forEach(d => { d.textContent = d.textContent.replace(/\$54$/, '$' + last); }); save('xl/workbook.xml', wbx); }
   save('xl/worksheets/sheet1.xml', s1);
 
   // Заказ-наряд: материал/цвет, кромка, площади, список деталей
