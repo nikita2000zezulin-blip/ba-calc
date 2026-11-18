@@ -54,6 +54,7 @@
 .bac-guide li.bac-rule{background:#23201d;color:#fff;border-color:#23201d;padding-left:14px}
 .bac-guide li.bac-rule::before{display:none}
 .bac-rule b{color:var(--ac2)}
+.bac-guide .bac-t18{color:var(--ac);font-weight:800;white-space:nowrap}
 .bac-main{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(340px,1fr);gap:20px;align-items:start}
 .bac-stage{position:sticky;top:16px;min-height:560px;border-radius:20px;overflow:hidden;
   background:radial-gradient(120% 90% at 50% 20%,#fbfaf7 0%,#ece6dd 60%,#ddd5c9 100%);cursor:grab;touch-action:none;user-select:none}
@@ -127,7 +128,7 @@
 .bac-dvp em{width:40px;height:40px;border-radius:8px;background:#f3f2ee;flex:none;border:1px solid rgba(0,0,0,.1)}
 .bac-dvp b{display:block}
 .bac-dvp small{color:var(--mute);font-size:13px}
-.bac-dims{display:grid;grid-template-columns:1fr 1fr .8fr;gap:10px}
+.bac-dims{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .bac-field{display:grid;gap:5px;font-size:13px;color:var(--mute);font-weight:600}
 .bac-num{display:flex;align-items:center;border:1px solid #cfc7bb;border-radius:10px;background:#fff;padding:0 10px}
 .bac-num:focus-within{border-color:var(--ink);box-shadow:0 0 0 3px rgba(239,91,30,.15)}
@@ -259,7 +260,6 @@
   .bac-droplist .bac-opt i{position:absolute;right:8px;top:8px;background:rgba(255,255,255,.9);color:var(--ink);border-radius:8px;padding:2px 6px}
   .bac-droplist .bac-opt[aria-selected=true]{box-shadow:0 0 0 3px var(--ac)}
   .bac-mat-badge{top:58px}
-  .bac-dims{grid-template-columns:1fr 1fr}.bac-dims .bac-field:last-child{grid-column:1/-1}
   .bac-table .bac-hide{display:none}
   .bac-table{font-size:13px}.bac-table td{padding:7px 3px}
   .bac-step button{width:26px;height:28px}.bac-step input{width:30px}
@@ -279,7 +279,7 @@
 
 <ol class="bac-guide">
   <li>Выберите материал: однотонный или древоподобный</li>
-  <li>Введите габариты детали (длина X и ширина Y), толщина всегда 18&nbsp;мм</li>
+  <li>Введите габариты детали (длина X и ширина Y), <b class="bac-t18">толщина материала 18&nbsp;мм</b></li>
   <li>Укажите стороны нанесения кромки</li>
   <li>Укажите количество деталей и отправьте расчёт</li>
   <li class="bac-rule"><b>Главное правило.</b> Пишите готовый размер детали. Кромка его не меняет: деталь 2700 мм с кромкой — это 2700 мм, не 2701. Кромку мы учтём при распиле сами.</li>
@@ -342,9 +342,6 @@
         <label class="bac-field" for="bac-W"><span>Ширина<b class="bac-ax">Y</b></span>
           <div class="bac-num"><input id="bac-W" type="number" inputmode="numeric" data-bac="W"><span>мм</span></div>
         </label>
-        <div class="bac-field">Толщина
-          <div class="bac-lock"><svg viewBox="0 0 24 24"><path d="M6 10V8a6 6 0 1 1 12 0v2h1a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V11a1 1 0 0 1 1-1h1zm2 0h8V8a4 4 0 1 0-8 0v2z"/></svg><span data-bac="tVal"></span></div>
-        </div>
       </div>
       <p class="bac-grain" data-bac="grainNote" hidden></p>
       <p class="bac-warn" data-bac="warn"></p>
@@ -544,7 +541,6 @@ function renderMaterial() {
   }
   const M = CFG.mat[p.mat];
   $('maxNote').textContent = `лист до ${M.maxL} × ${M.maxW}`;
-  $('tVal').textContent = `${fmtT(M.t)} мм всегда`;
   $('badge').innerHTML = ld ? `<img src="${imgOf(p.art)}" alt="">${esc(decorOf(p).name)} ${p.art}` : '<img alt="" style="background:#f3f2ee">ДВП белая 3,2 мм';
 }
 function renderEdgeSvg() {
@@ -569,9 +565,8 @@ function renderPanel() {
   renderMaterial();
   if (document.activeElement !== inL) inL.value = p.L; if (document.activeElement !== inW) inW.value = p.W;
   // X — направление текстуры: подсказка у декоров с рисунком древесины
-  const gr = ld && decorOf(p).grain;
-  $('grainNote').hidden = !gr;
-  if (gr) $('grainNote').innerHTML = `${GRAIN}<span><b>X — направление текстуры.</b> Полосы рисунка идут вдоль стороны ${p.L}&nbsp;мм.</span>`;
+  $('grainNote').hidden = !ld;
+  $('grainNote').innerHTML = `${GRAIN}<span><b>Древоподобная текстура идёт по стороне X</b></span>`;
   // ДВП не кромкуется (Никита 18.11): раздела «Кромка» нет, торцы на 3D не нажимаются
   $('edgeBox').hidden = !ld;
   root.querySelector('[data-view="edge"]').hidden = !ld;
