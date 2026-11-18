@@ -187,7 +187,7 @@
 .bac-step input::-webkit-outer-spin-button,.bac-step input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .bac-del{border:0;background:none;color:var(--mute);font-size:18px;cursor:pointer;padding:0 4px}
 .bac-del:hover{color:#b8430f}
-/* «+ Добавить ещё деталь» — главный призыв под расчётом (Никита 18.11): оранжевая, с пульсом. Пульс — тенью, размер кнопки не меняется.
+/* «+ Добавить эту деталь в заказ» — главный призыв под расчётом (Никита 18.11): оранжевая, с пульсом. Пульс — тенью, размер кнопки не меняется.
    .bac .bac-add — сильнее общего «.bac button{color:inherit}», иначе надпись тёмная */
 .bac .bac-add{display:grid;gap:3px;justify-items:center;border:0;background:linear-gradient(180deg,#ff7a33,#ef5b1e);color:#fff;border-radius:14px;padding:14px 16px 13px;cursor:pointer;width:100%;
   box-shadow:0 10px 24px rgba(239,91,30,.3);animation:bac-call 2.2s ease-out infinite}
@@ -293,7 +293,7 @@
   <li>Выберите материал: однотонный или древоподобный</li>
   <li>Введите габариты детали (длина X и ширина Y), <b class="bac-t18">толщина материала 18&nbsp;мм</b></li>
   <li>Укажите стороны нанесения кромки</li>
-  <li>Нажмите «Добавить деталь», укажите количество и отправьте расчёт</li>
+  <li>Нажмите «Добавить эту деталь в заказ», укажите количество и отправьте расчёт</li>
   <li class="bac-rule"><b>Главное правило.</b> Пишите готовый размер детали. Кромка его не меняет: деталь 2700 мм с кромкой — это 2700 мм, не 2701. Кромку мы учтём при распиле сами.</li>
 </ol>
 
@@ -639,7 +639,7 @@ function upsell(g) {
 }
 function renderOrder() {
   const r = calc();
-  $('groups').innerHTML = !parts.length ? '<div class="bac-noparts">Деталей пока нет. Выберите материал, размеры и кромку — и нажмите «Добавить деталь».</div>' : r.groups.map(g => {
+  $('groups').innerHTML = !parts.length ? '<div class="bac-noparts">Деталей пока нет. Выберите материал, размеры и кромку — и нажмите «Добавить эту деталь в заказ».</div>' : r.groups.map(g => {
     const ld = g.mat === 'ldsp';   // у ДВП столбца «Кромка» нет
     return `<div class="bac-group"><div class="bac-ghead"><h3>Детали в расчёте</h3>${chipOf(g.parts[0])}<span class="bac-garea">${fmt(g.area, 2)} м² · ${fmt(g.plate)} руб.</span></div>
     <table class="bac-table"><thead><tr><th class="bac-hide">№</th><th>X × Y, мм</th>${ld ? '<th>Кромка</th>' : ''}<th class="c">Шт.</th><th class="r">м²</th><th></th></tr></thead><tbody>
@@ -663,7 +663,7 @@ function renderOrder() {
 function renderAdd() {
   const b = $('add'), dup = addedLike(active);
   b.disabled = !!dup;
-  b.innerHTML = `<b>+ ${parts.length ? 'Добавить ещё деталь' : 'Добавить деталь'}</b><small>${dup ? 'Эту деталь вы уже добавили — количество можно изменить в таблице ниже' : 'Соберите весь заказ в одну заявку'}</small>`;
+  b.innerHTML = `<b>+ Добавить эту деталь в заказ</b><small>${dup ? 'Эту деталь вы уже добавили — количество можно изменить в таблице ниже' : 'Соберите весь заказ в одну заявку'}</small>`;
 }
 function update(rebuild = true) { renderPanel(); renderOrder(); renderAdd(); if (rebuild && view3d) view3d.sync(); }
 
@@ -900,7 +900,7 @@ $('form').addEventListener('submit', async e => {
   const err = m => { $('err').textContent = m; };
   if (!v('last') || !v('first')) return err('Напишите фамилию и имя — они нужны для договора.');
   if (!/^\+375\d{9}$/.test(phone)) return err('Допишите номер после +375: код и 7 цифр, например 44 123-45-67.');
-  if (!parts.length) return err('Добавьте хотя бы одну деталь — кнопка «Добавить деталь» в блоке «Габариты детали и кромка».');
+  if (!parts.length) return err('Добавьте хотя бы одну деталь — кнопка «Добавить эту деталь в заказ» в блоке «Габариты детали и кромка».');
   if (!f.elements.agree.checked) return err('Отметьте, что все размеры проверены вами лично.');
   err('');
   const who = { fio: [v('last'), v('first'), v('middle')].filter(Boolean).join(' '), phone, comment: v('comment') };
