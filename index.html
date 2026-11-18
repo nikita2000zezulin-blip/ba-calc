@@ -159,6 +159,8 @@
 .bac-btn{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
 .bac-btn:hover{border-color:var(--ink)}
 .bac-note{margin:8px 0 0;font-size:13px;color:var(--mute)}
+.bac-ebadge{font-weight:600;color:var(--mute);margin-left:6px}
+.bac-ecol{display:block;font-size:12px;color:var(--mute);margin-top:2px}
 .bac-note b{color:var(--ink)}
 .bac-bottom{display:grid;align-items:start;grid-template-columns:minmax(0,1.4fr) minmax(340px,1fr);gap:20px;margin-top:20px}
 .bac-groups{display:grid;gap:12px}
@@ -316,7 +318,7 @@
         <div class="bac-brands" role="group" aria-label="Производитель" data-bac="brands"></div>
         <p class="bac-bnote" data-bac="brandNote"></p>
         <p class="bac-cap">Цвет</p>
-        <div class="bac-pick">
+        <div class="bac-pick" data-bac="mPick">
           <button type="button" class="bac-pickbtn" data-bac="pickBtn" aria-haspopup="listbox" aria-expanded="false"></button>
           <div class="bac-drop" data-bac="drop" hidden>
             <div class="bac-drophead">
@@ -359,6 +361,10 @@
         </div>
       </div>
       <p class="bac-note" data-bac="edgeNote"></p>
+      <p class="bac-cap">Цвет кромки</p>
+      <div class="bac-pick" data-bac="ePick">
+        <button type="button" class="bac-pickbtn" data-bac="ePickBtn" aria-haspopup="listbox" aria-expanded="false"></button>
+      </div>
     </fieldset>
   </div>
 </div>
@@ -438,7 +444,7 @@ const brandOf = id => BRANDS.find(b => b.id === id);
 
 /* ---------- состояние ---------- */
 let uid = 1;
-const newPart = (o = {}) => Object.assign({ id: uid++, mat: 'ldsp', brand: 'byspan', art: DECORS[0].art, st: DECORS[0].st[0], L: 1200, W: 600, qty: 1, edges: { L1: true, L2: false, W1: false, W2: false } }, o);
+const newPart = (o = {}) => Object.assign({ id: uid++, mat: 'ldsp', brand: 'byspan', art: DECORS[0].art, st: DECORS[0].st[0], L: 1200, W: 600, qty: 1, eArt: null, edges: { L1: true, L2: false, W1: false, W2: false } }, o);
 const parts = [newPart()];
 let active = parts[0];
 
@@ -447,6 +453,16 @@ const colorName = p => p.mat === 'dvp' ? 'ДВП белая 3,2 мм' : `${decor
 const colorFull = p => p.mat === 'dvp' ? `ДВП белая ${fmtT(CFG.mat.dvp.t)} мм` : `ЛДСП ${brandOf(p.brand).name} ${CFG.mat.ldsp.t} мм · ${decorOf(p).name} ${p.art} · структура ${p.st}`;
 const priceM2 = p => p.mat === 'dvp' ? CFG.mat.dvp.priceM2 : decorOf(p).price;
 const area1 = p => p.L * p.W / 1e6;
+// Цвет кромки: сначала в цвет материала (eArt = null), можно выбрать любой декор того же производителя (Никита 18.11). Цена кромки одна.
+const edgeArt = p => p.eArt || p.art;
+const edgeColor = p => p.eArt ? `${decorOf({ art: p.eArt }).name} ${p.eArt}` : 'в цвет материала';
+function edgeColorsOf(g) {   // для блока цвета в заявке: один цвет кромки на всех или по деталям
+  const ps = g.parts.filter(p => edgeMm(p));
+  if (!ps.length) return 'без кромки';
+  const u = [...new Set(ps.map(p => p.eArt || ''))];
+  if (u.length === 1) return u[0] ? edgeColor(ps[0]) : 'в цвет';
+  return g.parts.map((p, i) => edgeMm(p) ? `${i + 1}) ${p.eArt ? edgeColor(p) : 'в цвет'}` : null).filter(Boolean).join('; ');
+}
 
 // Стороны L1/L2 идут вдоль X (длина), W1/W2 — вдоль Y (ширина). X — направление текстуры (Никита 18.11), поэтому X бывает и короче Y:
 // «длинная/короткая» считаем по настоящим размерам, у квадрата — «по X / по Y». ДВП не кромкуется: у неё кромки нет вовсе.
@@ -488,7 +504,7 @@ function summary(who) {
   if (who) out.push(`Заказчик: ${who.fio}`, `Телефон: ${who.phone}`, ...(who.comment ? [`Комментарий: ${who.comment}`] : []));
   for (const g of r.groups) {
     out.push('', `${colorFull(g.parts[0])} — ${fmt(g.area, 3)} м², ${fmt(g.plate)} руб.`);
-    g.parts.forEach((p, i) => out.push(`${i + 1}) ${p.L}×${p.W} мм, ${p.qty} шт.${p.mat === 'dvp' ? '' : `, кромка: ${edgeText(p)}`} — ${fmt(area1(p) * p.qty, 3)} м²`));
+    g.parts.forEach((p, i) => out.push(`${i + 1}) ${p.L}×${p.W} мм, ${p.qty} шт.${p.mat === 'dvp' ? '' : `, кромка: ${edgeText(p)}${edgeMm(p) ? `, цвет кромки: ${edgeColor(p)}` : ''}`} — ${fmt(area1(p) * p.qty, 3)} м²`));
   }
   out.push('');
   for (const [id, x] of Object.entries(r.m)) if (x.n) {
@@ -508,20 +524,26 @@ $('filt').innerHTML = KINDS.map(([k, t]) => `<button type="button" data-kind="${
 const LOCK = '<svg viewBox="0 0 24 24"><path d="M6 10V8a6 6 0 1 1 12 0v2h1a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V11a1 1 0 0 1 1-1h1zm2 0h8V8a4 4 0 1 0-8 0v2z"/></svg>';
 const GRAIN = '<svg viewBox="0 0 26 20" aria-hidden="true"><path d="M2 5c4-2 8 2 13 0M2 10c4-2 8 2 13 0M2 15c4-2 8 2 13 0M18 10h6M21.5 7.5 24 10l-2.5 2.5"/></svg>';
 
-let pickKind = 'all', pickQ = '';
+let pickKind = 'all', pickQ = '', pickFor = 'mat';
 function renderList() {
   const q = pickQ.trim().toLowerCase();
   const list = brandOf(active.brand).decors.filter(d => q ? (d.art.includes(q) || d.name.toLowerCase().includes(q)) : (pickKind === 'all' || d.kind === pickKind));
-  $('dropList').innerHTML = list.length ? list.map(d => `<button type="button" class="bac-opt" role="option" data-art="${d.art}" aria-selected="${d.art === active.art}">
+  const edge = pickFor === 'edge', sel = edge ? active.eArt : active.art, m = decorOf(active);
+  const same = edge && !q ? `<button type="button" class="bac-opt" role="option" data-art="same" aria-selected="${!active.eArt}">
+      <img src="${imgOf(m.art)}" alt=""><span><b>Как у материала</b><small>${esc(m.name)} ${m.art}</small></span><i>в цвет</i></button>` : '';
+  $('dropList').innerHTML = list.length ? same + list.map(d => `<button type="button" class="bac-opt" role="option" data-art="${d.art}" aria-selected="${d.art === sel}">
       <img src="${imgOf(d.art)}" alt="" loading="lazy"><span><b>${esc(d.name)}</b><small>арт. ${d.art} · ${d.st.join(', ')}</small></span><i>${fmt(d.price, 0)} руб./м²</i></button>`).join('')
     : '<div class="bac-empty">Ничего не нашли. Попробуйте артикул, например 601.</div>';
 }
-function openDrop(open) {
-  const drop = $('drop'), btn = $('pickBtn');
-  drop.hidden = !open; btn.setAttribute('aria-expanded', open);
+const pickBtnOf = w => $(w === 'edge' ? 'ePickBtn' : 'pickBtn');
+function openDrop(open, what = pickFor) {
+  const drop = $('drop');
+  if (open) { pickFor = what; const box = $(what === 'edge' ? 'ePick' : 'mPick'); if (drop.parentNode !== box) box.appendChild(drop); }
+  drop.hidden = !open;
+  $('pickBtn').setAttribute('aria-expanded', open && pickFor === 'mat'); $('ePickBtn').setAttribute('aria-expanded', open && pickFor === 'edge');
   document.documentElement.style.overflow = open && isMobile() ? 'hidden' : '';
   if (open) {
-    $('dropTitle').textContent = `Цвет ${brandOf(active.brand).name}`;
+    $('dropTitle').textContent = `${pickFor === 'edge' ? 'Цвет кромки' : 'Цвет'} ${brandOf(active.brand).name}`;
     renderList();
     const sel = drop.querySelector('[aria-selected=true]'); if (sel && !isMobile()) sel.scrollIntoView({ block: 'nearest' });
     if (!isMobile()) $('search').focus({ preventScroll: true });
@@ -542,7 +564,7 @@ function renderMaterial() {
   }
   const M = CFG.mat[p.mat];
   $('maxNote').textContent = `лист до ${M.maxL} × ${M.maxW}`;
-  $('badge').innerHTML = ld ? `<img src="${imgOf(p.art)}" alt="">${esc(decorOf(p).name)} ${p.art}` : '<img alt="" style="background:#f3f2ee">ДВП белая 3,2 мм';
+  $('badge').innerHTML = ld ? `<img src="${imgOf(p.art)}" alt="">${esc(decorOf(p).name)} ${p.art}` + (p.eArt && edgeMm(p) ? `<small class="bac-ebadge">кромка: ${esc(edgeColor(p))}</small>` : '') : '<img alt="" style="background:#f3f2ee">ДВП белая 3,2 мм';
 }
 function renderEdgeSvg() {
   const p = active, s = Math.min(160 / p.L, 88 / p.W), w = Math.max(44, p.L * s), h = Math.max(24, p.W * s);
@@ -574,8 +596,10 @@ function renderPanel() {
   $('hint').firstElementChild.textContent = ld ? 'Тяните, чтобы покрутить. Нажмите на любой торец — кромка включится.' : 'Тяните, чтобы покрутить.';
   if (!ld) return;
   renderEdgeSvg();
+  const ed = decorOf({ art: edgeArt(p) });
+  $('ePickBtn').innerHTML = `<img src="${imgOf(ed.art)}" alt=""><span><b>${p.eArt ? esc(ed.name) : 'Как у материала'}</b><small>${p.eArt ? `арт. ${ed.art} · свой цвет кромки` : `${esc(ed.name)} ${ed.art} · в цвет`}</small></span><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>`;
   const em = edgeMm(p);
-  $('edgeNote').innerHTML = em ? `Кромка: <b>${edgeText(p)}</b>, ${fmt(em / 1000, 2)} м.п. на деталь. Размер остаётся <b>${p.L} × ${p.W}</b> — с кромкой и без.` : 'Сейчас без кромки. Нажмите на сторону, где она нужна.';
+  $('edgeNote').innerHTML = em ? `Кромка: <b>${edgeText(p)}</b>, ${fmt(em / 1000, 2)} м.п. на деталь, цвет — <b>${edgeColor(p)}</b>. Размер остаётся <b>${p.L} × ${p.W}</b> — с кромкой и без.` : 'Сейчас без кромки. Нажмите на сторону, где она нужна.';
 }
 function chipOf(p) {
   return p.mat === 'dvp' ? `<span class="bac-gchip"><em></em>ДВП белая 3,2 мм</span>`
@@ -604,7 +628,7 @@ function renderOrder() {
     return `<div class="bac-group"><div class="bac-ghead"><h3>Детали в расчёте</h3>${chipOf(g.parts[0])}<span class="bac-garea">${fmt(g.area, 2)} м² · ${fmt(g.plate)} руб.</span></div>
     <table class="bac-table"><thead><tr><th class="bac-hide">№</th><th>X × Y, мм</th>${ld ? '<th>Кромка</th>' : ''}<th class="c">Шт.</th><th class="r">м²</th><th></th></tr></thead><tbody>
     ${g.parts.map((p, i) => `<tr data-part="${p.id}" class="${p === active ? 'is-on' : ''}">
-      <td class="bac-hide">${i + 1}</td><td><b>${p.L} × ${p.W}</b></td>${ld ? `<td>${edgeText(p)}</td>` : ''}
+      <td class="bac-hide">${i + 1}</td><td><b>${p.L} × ${p.W}</b></td>${ld ? `<td>${edgeText(p)}${p.eArt && edgeMm(p) ? `<small class="bac-ecol">кромка: ${esc(edgeColor(p))}</small>` : ''}</td>` : ''}
       <td class="c"><span class="bac-step"><button type="button" data-dq="-1" data-id="${p.id}" aria-label="Меньше">−</button><input type="number" min="1" max="999" value="${p.qty}" data-qid="${p.id}" aria-label="Количество"><button type="button" data-dq="1" data-id="${p.id}" aria-label="Больше">+</button></span></td>
       <td class="r">${fmt(area1(p) * p.qty, 2)}</td>
       <td class="r">${parts.length > 1 ? `<button type="button" class="bac-del" data-del="${p.id}" aria-label="Удалить деталь">×</button>` : ''}</td></tr>`).join('')}
@@ -654,7 +678,7 @@ function setMat(mat) {
 }
 function toggleEdge(k) { if (active.mat === 'dvp') return; active.edges[k] = !active.edges[k]; update(); if (view3d) view3d.pulse(k); }
 root.addEventListener('click', e => {
-  const t = e.target.closest('[data-mat],[data-brand],[data-art],[data-st],[data-kind],[data-edge],[data-edges],[data-dq],[data-qid],[data-del],[data-part],[data-view],[data-bac="add"],[data-addfrom],[data-bac="pickBtn"],[data-bac="dropClose"]');
+  const t = e.target.closest('[data-mat],[data-brand],[data-art],[data-st],[data-kind],[data-edge],[data-edges],[data-dq],[data-qid],[data-del],[data-part],[data-view],[data-bac="add"],[data-addfrom],[data-bac="pickBtn"],[data-bac="ePickBtn"],[data-bac="dropClose"]');
   if (!t) return;
   const d = t.dataset;
   if (d.mat) setMat(d.mat);
@@ -663,10 +687,12 @@ root.addEventListener('click', e => {
     if (!b.decors.length) { $('brandNote').textContent = `Декоры ${b.name} добавим, как только получим прайс. Пока считаем по BYSPAN.`; return; }
     $('brandNote').textContent = ''; active.brand = b.id; update();
   }
-  else if (d.bac === 'pickBtn') openDrop($('drop').hidden);
+  else if (d.bac === 'pickBtn') openDrop($('drop').hidden || pickFor !== 'mat', 'mat');
+  else if (d.bac === 'ePickBtn') openDrop($('drop').hidden || pickFor !== 'edge', 'edge');
   else if (d.bac === 'dropClose') openDrop(false);
   else if (d.kind) { pickKind = d.kind; root.querySelectorAll('[data-kind]').forEach(b => b.setAttribute('aria-pressed', b.dataset.kind === pickKind)); renderList(); }
-  else if (d.art) { const dc = DECORS.find(x => x.art === d.art); active.art = dc.art; if (!dc.st.includes(active.st)) active.st = dc.st[0]; openDrop(false); update(); }
+  else if (d.art && pickFor === 'edge') { active.eArt = d.art === 'same' || d.art === active.art ? null : d.art; openDrop(false); update(); }
+  else if (d.art) { const dc = DECORS.find(x => x.art === d.art); active.art = dc.art; if (!dc.st.includes(active.st)) active.st = dc.st[0]; if (active.eArt === dc.art) active.eArt = null; openDrop(false); update(); }
   else if (d.st) { active.st = d.st; update(false); }
   else if (d.edge) toggleEdge(d.edge);
   else if (d.edges) { const v = d.edges === 'all'; ['L1', 'L2', 'W1', 'W2'].forEach(k => active.edges[k] = v); update(); }
@@ -677,7 +703,7 @@ root.addEventListener('click', e => {
   else if (d.view) { view3d && view3d.setView(d.view); }
   else if (d.bac === 'add' || d.addfrom) {
     const src = d.addfrom ? parts.find(p => p.id === +d.addfrom) : active;
-    active = newPart({ mat: src.mat, brand: src.brand, art: src.art, st: src.st, L: src.L, W: src.W, edges: { ...src.edges }, fresh: { L: true, W: true } });
+    active = newPart({ mat: src.mat, brand: src.brand, art: src.art, st: src.st, eArt: src.eArt, L: src.L, W: src.W, edges: { ...src.edges }, fresh: { L: true, W: true } });
     parts.push(active); update();
     root.querySelector('.bac-main').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
     setTimeout(() => inL.focus({ preventScroll: true }), reduce ? 0 : 450);
@@ -688,7 +714,7 @@ root.addEventListener('change', e => {
   const p = parts.find(x => x.id === +q.dataset.qid); p.qty = clamp(Math.round(+q.value) || 1, 1, 999); renderOrder();
 });
 document.addEventListener('click', e => { if (!$('drop').hidden && !e.target.closest('.bac-pick')) openDrop(false); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('drop').hidden) { openDrop(false); $('pickBtn').focus(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('drop').hidden) { openDrop(false); pickBtnOf(pickFor).focus(); } });
 
 /* ---------- заявка: файл Excel по шаблону Павла ---------- */
 const enc = new TextEncoder(), dec = new TextDecoder();
@@ -768,7 +794,7 @@ function orderTable(doc, X, G, start) {
     const p0 = g.parts[0], ld = g.mat === 'ldsp', k = g.k, pm = priceM2(p0);
     box('A', r, 'B', r, ld ? 'цвет ЛДСП' : 'цвет ДВП', X.lbl);
     box('C', r, 'N', r, ld ? `${decorOf(p0).name} ${p0.art} · ${brandOf(p0.brand).name} · структура ${p0.st}` : `белая, ${fmtT(CFG.mat.dvp.t)} мм`, X.color); r++;
-    box('A', r, 'B', r, 'кромка', X.lbl); box('C', r, 'N', r, g.edgeM ? 'в цвет' : 'без кромки', X.edge); r++;
+    box('A', r, 'B', r, 'кромка', X.lbl); box('C', r, 'N', r, edgeColorsOf(g), X.edge); r++;
     row(r, ['размер X', 'Кр', 'размер Y', 'Кр', 'кол-во', 'площадь Sр', 'длина Рк'], X.hdr); r++;
     const r0 = r;
     for (const p of g.parts) {
@@ -816,7 +842,7 @@ async function buildXlsx(who) {
 
   // Договор: заказчик, телефон, основные материалы, стоимость
   setCell(s1, 'B5', who.fio); setCell(s1, 'B6', who.phone);
-  setCell(s1, 'D9', G.map(g => `${colorFull(g.parts[0])} — ${fmt(gArea(g), 2)} м²${g.mat === 'dvp' ? '' : `, кромка ${fmt(gEdge(g), 2)} м.п.`}`).join('\n') + `\nЗаявка с сайта${who.comment ? '. Комментарий: ' + who.comment : ''}`, WRAP);
+  setCell(s1, 'D9', G.map(g => `${colorFull(g.parts[0])} — ${fmt(gArea(g), 2)} м²${g.mat === 'dvp' ? '' : `, кромка ${fmt(gEdge(g), 2)} м.п. (${edgeColorsOf(g)})`}`).join('\n') + `\nЗаявка с сайта${who.comment ? '. Комментарий: ' + who.comment : ''}`, WRAP);
   setCell(s1, 'Q13', r.total);
   // общая стоимость = услуги + фурнитура (фурнитуру заказчик впишет в Q14); число записано сразу — в «Защищённом просмотре» Excel формулы не пересчитывает
   setCell(s1, 'Q15', { f: 'Q13+Q14', v: r.total }); setCell(s1, 'Q18', { f: 'Q15-Q17', v: r.total }); setCell(s1, 'O25', { f: 'B5', v: who.fio });
@@ -830,7 +856,7 @@ async function buildXlsx(who) {
     const row = 10 + i, last = i === 3 && G.length > 4;
     setCell(s2, `A${row}`, last ? `+ ещё ${G.length - 3} цв. — лист «Детали»` : colorName(g.parts[0]));
     setCell(s2, `D${row}`, `${fmt(gArea(g), 2)} м²`);
-    setCell(s2, `E${row}`, gEdge(g) ? 'в цвет' : '—'); setCell(s2, `G${row}`, g.mat === 'dvp' ? '—' : `${fmt(gEdge(g), 1)} м.п.`);
+    setCell(s2, `E${row}`, gEdge(g) ? edgeColorsOf(g) : '—'); setCell(s2, `G${row}`, g.mat === 'dvp' ? '—' : `${fmt(gEdge(g), 1)} м.п.`);
   });
   if (who.comment) setCell(s2, 'I10', who.comment);
   const lines = [];
@@ -846,14 +872,14 @@ async function buildXlsx(who) {
   // Новый лист «Детали» — полный список для распила
   const rows = [[`Заявка с калькулятора ba-raspil.by от ${new Date().toLocaleString('ru-RU')}`], ['Заказчик', who.fio], ['Телефон', who.phone], ['Комментарий', who.comment || '—'], ['Размеры', 'готовые, с кромкой; X — вдоль текстуры'], []];
   G.forEach(g => {
-    rows.push([colorFull(g.parts[0])], ['№', 'Длина X, мм', 'Ширина Y, мм', 'Кол-во, шт', 'Кромка по X, стор.', 'Кромка по Y, стор.', 'Кромка, м.п.', 'Площадь, м²']);
-    g.parts.forEach((p, i) => { const e = edgeCount(p); rows.push([i + 1, p.L, p.W, p.qty, e.l, e.w, r3(edgeMm(p) / 1000 * p.qty), r3(area1(p) * p.qty)]); });
+    rows.push([colorFull(g.parts[0])], ['№', 'Длина X, мм', 'Ширина Y, мм', 'Кол-во, шт', 'Кромка по X, стор.', 'Кромка по Y, стор.', 'Кромка, м.п.', 'Площадь, м²', 'Цвет кромки']);
+    g.parts.forEach((p, i) => { const e = edgeCount(p); rows.push([i + 1, p.L, p.W, p.qty, e.l, e.w, r3(edgeMm(p) / 1000 * p.qty), r3(area1(p) * p.qty), p.mat === 'dvp' || !edgeMm(p) ? '—' : edgeColor(p)]); });
     rows.push([]);
   });
   for (const id of ['ldsp', 'dvp']) if (r.m[id].n) { const x = r.m[id], nm = CFG.mat[id].name; rows.push([nm, `${fmt(x.area, 3)} м²`, `${fmt(x.plate)} руб.`]); if (id === 'ldsp') rows.push([`Кромка ${nm}`, `${fmt(x.edgeM, 2)} м.п.`, `${fmt(x.edge)} руб.`]); }
   rows.push(['ИТОГО', '', r.total]);
   const cellXml = (v, ref) => typeof v === 'number' ? `<c r="${ref}"><v>${v}</v></c>` : `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${esc(v)}</t></is></c>`;
-  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="${NS}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><cols><col min="1" max="1" width="14" customWidth="1"/><col min="2" max="8" width="13" customWidth="1"/></cols><sheetData>${rows.map((rw, i) => `<row r="${i + 1}">${rw.map((v, j) => cellXml(v, 'ABCDEFGH'[j] + (i + 1))).join('')}</row>`).join('')}</sheetData><pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>`;
+  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="${NS}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><cols><col min="1" max="1" width="14" customWidth="1"/><col min="2" max="8" width="13" customWidth="1"/><col min="9" max="9" width="24" customWidth="1"/></cols><sheetData>${rows.map((rw, i) => `<row r="${i + 1}">${rw.map((v, j) => cellXml(v, 'ABCDEFGHI'[j] + (i + 1))).join('')}</row>`).join('')}</sheetData><pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>`;
   files.set('xl/worksheets/sheet4.xml', enc.encode(sheet));
   const ct = load('[Content_Types].xml'), ov = ct.createElementNS('http://schemas.openxmlformats.org/package/2006/content-types', 'Override');
   ov.setAttribute('PartName', '/xl/worksheets/sheet4.xml'); ov.setAttribute('ContentType', 'application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml'); ct.documentElement.appendChild(ov); save('[Content_Types].xml', ct);
@@ -997,7 +1023,7 @@ function init3d() {
     if (texCache[art]) return texCache[art];
     const d = DECORS.find(x => x.art === art);
     texCache[art] = prep(new THREE.CanvasTexture(d.grain ? woodCanvas(d.c) : noiseCanvas(d.c, 6, false)));
-    loader.load(imgOf(art), t => { texCache[art] = prep(t); if (active.mat === 'ldsp' && active.art === art) { applyMaterials(); dirty = true; } }, undefined, () => console.warn('3D: картинка декора не загрузилась, показываем цвет', art));
+    loader.load(imgOf(art), t => { texCache[art] = prep(t); if (active.mat === 'ldsp' && (active.art === art || edgeArt(active) === art)) { applyMaterials(); dirty = true; } }, undefined, () => console.warn('3D: картинка декора не загрузилась, показываем цвет', art));
     return texCache[art];
   };
 
@@ -1013,14 +1039,14 @@ function init3d() {
   const faceTex = [];
   let rotate = false;
   function applyMaterials() {
-    const dvp = active.mat === 'dvp', top = dvp ? dvpTop : decorTex(active.art), raw = dvp ? dvpBack : rawLdsp;
+    const dvp = active.mat === 'dvp', top = dvp ? dvpTop : decorTex(active.art), etop = dvp ? top : decorTex(edgeArt(active)), raw = dvp ? dvpBack : rawLdsp;
     // X — направление текстуры: на картинках span.by волокно вертикальное, поворот на 90° кладёт его вдоль X (длины) у всех декоров ЛДСП,
     // не только у «древоподобных» в фильтре (было у Дуба Белфорт — в «Однотонных», но с волокном; 18.11 убран). Схема кромки повёрнута так же.
     rotate = !dvp;
     faceTex.forEach(t => t.dispose()); faceTex.length = 0;
     faces.forEach((m, i) => {
       const k = FACE[i], banded = !k || active.edges[k];
-      const t = (dvp && i === 3 ? dvpBack : banded ? top : raw).clone(); t.needsUpdate = true; t.rotation = banded && rotate ? Math.PI / 2 : 0; faceTex[i] = t;
+      const t = (dvp && i === 3 ? dvpBack : banded ? (k ? etop : top) : raw).clone(); t.needsUpdate = true; t.rotation = banded && rotate ? Math.PI / 2 : 0; faceTex[i] = t;
       m.map = t; m.roughness = banded ? (k ? .4 : .58) : .9; m.needsUpdate = true;
     });
     dirty = true;
