@@ -505,15 +505,14 @@ function groups() {
     x.base = x.parts.reduce((a, p) => a + area1(p) * p.qty * priceM2(p), 0);
     x.edgeM = x.parts.reduce((a, p) => a + edgeMm(p) / 1000 * p.qty, 0);
     x.k = koefFor(x.area); x.plate = r2(x.base * x.k); x.edge = r2(x.edgeM * CFG.edgePriceM);
-    // итог цвета — до целого рубля в меньшую сторону, в пользу клиента (Никита 18.11: 68,99 → 68)
-    x.sum = Math.floor(r2(x.plate + x.edge) + 1e-9);
+    x.sum = r2(x.plate + x.edge);   // итог цвета — точный, в копейках
   }
   return g;
 }
 function calc() {
   const G = groups(), m = { ldsp: { area: 0, plate: 0, edge: 0, edgeM: 0, n: 0 }, dvp: { area: 0, plate: 0, edge: 0, edgeM: 0, n: 0 } };
   for (const g of G) { const x = m[g.mat]; x.area += g.area; x.plate = r2(x.plate + g.plate); x.edge = r2(x.edge + g.edge); x.edgeM += g.edgeM; x.n += g.parts.length; }
-  const exact = r2(m.ldsp.plate + m.ldsp.edge + m.dvp.plate + m.dvp.edge), total = G.reduce((a, g) => a + g.sum, 0);
+  const exact = r2(m.ldsp.plate + m.ldsp.edge + m.dvp.plate + m.dvp.edge), total = Math.floor(exact + 1e-9);   // округляем только конечный итог, вниз до рубля: 142,07 → 142 (Никита 18.11)
   return { m, groups: G, area: m.ldsp.area + m.dvp.area, total, exact, edgeM: m.ldsp.edgeM + m.dvp.edgeM };
 }
 function summary(who) {
@@ -527,7 +526,7 @@ function summary(who) {
   for (const [id, x] of Object.entries(r.m)) if (x.n) {
     out.push(`${CFG.mat[id].name}: ${fmt(x.area, 3)} м² — ${fmt(x.plate)} руб.${id === 'dvp' ? ', без кромки' : `; кромка ${fmt(x.edgeM, 2)} м.п. — ${fmt(x.edge)} руб.`}`);
   }
-  out.push(`ИТОГО: ${fmt(r.total, 0)} руб. (${r.groups.length > 1 ? 'итог каждого цвета ' : ''}округлено до рубля в меньшую сторону${r.exact !== r.total ? `, без округления ${fmt(r.exact)}` : ''})`);
+  out.push(`ИТОГО: ${fmt(r.total, 0)} руб. (округлено до рубля в меньшую сторону${r.exact !== r.total ? `, без округления ${fmt(r.exact)}` : ''})`);
   return out.join('\n');
 }
 
@@ -654,7 +653,7 @@ function renderOrder() {
 
   $('total').innerHTML = `${fmt(r.total, 0)}<small>руб.</small>`;
   $('round').hidden = !parts.length;
-  $('round').innerHTML = `Округляем ${r.groups.length > 1 ? 'итог каждого цвета ' : ''}до целого рубля <b>в меньшую сторону — в вашу пользу</b>${r.exact !== r.total ? `: без округления было бы ${fmt(r.exact)} руб.` : '.'}`;
+  $('round').innerHTML = `Округляем до целого рубля <b>в меньшую сторону — в вашу пользу</b>${r.exact !== r.total ? `: без округления было бы ${fmt(r.exact)} руб.` : '.'}`;
   $('break').innerHTML = ['ldsp', 'dvp'].filter(id => r.m[id].n).map(id => {
     const x = r.m[id], nm = CFG.mat[id].name;
     return `<tr class="bac-mhead"><th>${nm}</th><td>${fmt(x.area, 2)} м²</td><td class="r">${fmt(x.plate)} руб.</td></tr>`
@@ -837,12 +836,12 @@ function orderTable(doc, G, start) {
     put(r, 32); r++;
     const b = sect(33, 34, 'кромкование', 'длина   Рк м/п', 'цена  за м/п', 'H', g.edgeM, CFG.edgePriceM, `${CFG.edgePriceM}`);
     put(r, 35); r++;
-    // итог цвета — до рубля в меньшую сторону (в пользу клиента)
-    put(r, 36, { B: G.length > 1 ? 'ИТОГО по цвету' : 'ИТОГО', F: { f: `ROUNDDOWN(${a}+${b},0)`, v: g.sum }, H: 'руб' }); merge(`B${r}:E${r}`); merge(`F${r}:G${r}`);
+    // итог цвета при нескольких цветах — точный; вниз до рубля округляем только конечный итог (Никита 18.11: 142,07 → 142)
+    put(r, 36, { B: G.length > 1 ? 'ИТОГО по цвету' : 'ИТОГО', F: G.length > 1 ? { f: `${a}+${b}`, v: g.sum } : { f: `ROUNDDOWN(${a}+${b},0)`, v: Math.floor(g.sum + 1e-9) }, H: 'руб' }); merge(`B${r}:E${r}`); merge(`F${r}:G${r}`);
     totals.push(`F${r}`); r += 2;
   }
   r--;   // общий итог — сразу под последним блоком
-  if (G.length > 1) { put(r, 36, { B: 'ИТОГО по заказу', F: { f: totals.join('+'), v: G.reduce((s, g) => s + g.sum, 0) }, H: 'руб' }); merge(`B${r}:E${r}`); merge(`F${r}:G${r}`); totals.push(`F${r}`); r++; }
+  if (G.length > 1) { put(r, 36, { B: 'ИТОГО по заказу', F: { f: `ROUNDDOWN(${totals.join('+')},0)`, v: calc().total }, H: 'руб' }); merge(`B${r}:E${r}`); merge(`F${r}:G${r}`); totals.push(`F${r}`); r++; }
   return { last: r - 1, total: totals[totals.length - 1] };
 }
 async function buildXlsx(who) {
